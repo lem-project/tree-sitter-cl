@@ -119,7 +119,19 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add static/
+
+          # Debug: show git status before add
+          echo "=== Before git add ==="
+          git status
+          ls -laR static/
+
+          # Force add all files in static/
+          git add -f static/
+
+          # Debug: show what's staged
+          echo "=== After git add ==="
+          git status
+
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
