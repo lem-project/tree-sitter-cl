@@ -55,9 +55,6 @@ jobs:
 
   build-macos:
     runs-on: macos-latest
-    strategy:
-      matrix:
-        arch: [arm64, x86_64]
 
     steps:
       - uses: actions/checkout@v4
@@ -68,11 +65,11 @@ jobs:
       - name: Build wrapper library
         run: |
           cd c-wrapper
-          if [ "${{ matrix.arch }}" = "x86_64" ]; then
-            CFLAGS="-shared -fPIC -dynamiclib -arch x86_64" make
-          else
-            CFLAGS="-shared -fPIC -dynamiclib -arch arm64" make
-          fi
+          BREW_PREFIX=$(brew --prefix)
+          cc -shared -fPIC -dynamiclib \
+             -I${BREW_PREFIX}/include \
+             -L${BREW_PREFIX}/lib \
+             -o libts-wrapper.dylib ts-wrapper.c -ltree-sitter
           ls -la
 
       - name: Package binary
@@ -80,13 +77,13 @@ jobs:
           mkdir -p dist
           cp c-wrapper/libts-wrapper.dylib dist/
           cd dist
-          tar czvf libts-wrapper-macos-${{ matrix.arch }}.tar.gz libts-wrapper.dylib
+          tar czvf libts-wrapper-macos-arm64.tar.gz libts-wrapper.dylib
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: libts-wrapper-macos-${{ matrix.arch }}
-          path: dist/libts-wrapper-macos-${{ matrix.arch }}.tar.gz
+          name: libts-wrapper-macos-arm64
+          path: dist/libts-wrapper-macos-arm64.tar.gz
 
   release:
     needs: [build-linux, build-macos]
@@ -129,7 +126,6 @@ jobs:
             |----------|--------------|----------|
             | Linux | x86_64 | `libts-wrapper-linux-x86_64.tar.gz` |
             | macOS | arm64 (Apple Silicon) | `libts-wrapper-macos-arm64.tar.gz` |
-            | macOS | x86_64 (Intel) | `libts-wrapper-macos-x86_64.tar.gz` |
 
             ### Installation
 
