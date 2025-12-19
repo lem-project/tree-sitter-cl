@@ -48,12 +48,14 @@ jobs:
           export LD_LIBRARY_PATH="$TREE_SITTER_LIB:$TS_WRAPPER_LIB:$JSON_GRAMMAR_LIB"
           export CL_SOURCE_REGISTRY="$PWD//"
 
+          # Upgrade ASDF before loading anything (bundled ASDF 3.3.1 is too old for :local-nicknames)
+          curl -sO https://asdf.common-lisp.dev/archives/asdf.lisp
+
           sbcl --non-interactive \
+               --load asdf.lisp \
                --eval '(format t "ASDF version: ~a~%" (asdf:asdf-version))' \
                --eval '(ql:quickload :rove)' \
                --eval '(ql:quickload (list :cffi :alexandria :trivial-garbage :babel))' \
-               --eval '(asdf:clear-source-registry)' \
-               --eval '(asdf:initialize-source-registry)' \
                --eval '(ql:quickload :tree-sitter-cl/tests)' \
                --eval '(let ((result (rove:run :tree-sitter-cl/tests))) (unless result (uiop:quit 1)))'
 
