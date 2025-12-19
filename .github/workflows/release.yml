@@ -1,0 +1,145 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v0.1.0)'
+        required: true
+        type: string
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x86_64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Install tree-sitter
+        run: |
+          git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git
+          cd tree-sitter
+          make
+          sudo make install
+          sudo ldconfig
+
+      - name: Build wrapper library
+        run: |
+          cd c-wrapper
+          make
+          ls -la
+
+      - name: Package binary
+        run: |
+          mkdir -p dist
+          cp c-wrapper/libts-wrapper.so dist/
+          cd dist
+          tar czvf libts-wrapper-linux-${{ matrix.arch }}.tar.gz libts-wrapper.so
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libts-wrapper-linux-${{ matrix.arch }}
+          path: dist/libts-wrapper-linux-${{ matrix.arch }}.tar.gz
+
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [arm64, x86_64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tree-sitter
+        run: brew install tree-sitter
+
+      - name: Build wrapper library
+        run: |
+          cd c-wrapper
+          if [ "${{ matrix.arch }}" = "x86_64" ]; then
+            CFLAGS="-shared -fPIC -dynamiclib -arch x86_64" make
+          else
+            CFLAGS="-shared -fPIC -dynamiclib -arch arm64" make
+          fi
+          ls -la
+
+      - name: Package binary
+        run: |
+          mkdir -p dist
+          cp c-wrapper/libts-wrapper.dylib dist/
+          cd dist
+          tar czvf libts-wrapper-macos-${{ matrix.arch }}.tar.gz libts-wrapper.dylib
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libts-wrapper-macos-${{ matrix.arch }}
+          path: dist/libts-wrapper-macos-${{ matrix.arch }}.tar.gz
+
+  release:
+    needs: [build-linux, build-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          find artifacts -name '*.tar.gz' -exec cp {} release/ \;
+          ls -la release/
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
+          body: |
+            ## Binary Downloads
+
+            | Platform | Architecture | Download |
+            |----------|--------------|----------|
+            | Linux | x86_64 | `libts-wrapper-linux-x86_64.tar.gz` |
+            | macOS | arm64 (Apple Silicon) | `libts-wrapper-macos-arm64.tar.gz` |
+            | macOS | x86_64 (Intel) | `libts-wrapper-macos-x86_64.tar.gz` |
+
+            ### Installation
+
+            1. Download the appropriate archive for your platform
+            2. Extract: `tar xzf libts-wrapper-*.tar.gz`
+            3. Copy to your library path (e.g., `/usr/local/lib`)
+
+            ### Requirements
+
+            - tree-sitter library must be installed on your system
+          files: release/*
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
