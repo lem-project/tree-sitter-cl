@@ -21,7 +21,7 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Run tests
-        run: nix flake check
+        run: nix build .#checks.x86_64-linux.test
 
   lint:
     runs-on: ubuntu-latest
@@ -29,16 +29,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check for trailing whitespace
-        run: |
-          if grep -rn '[[:blank:]]$' --include='*.lisp' --include='*.asd' .; then
-            echo "Found trailing whitespace"
-            exit 1
-          fi
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
+        with:
+          nix_path: nixpkgs=channel:nixos-24.11
+          extra_nix_config: |
+            experimental-features = nix-command flakes
 
-      - name: Check for tabs
-        run: |
-          if grep -rn $'\t' --include='*.lisp' --include='*.asd' .; then
-            echo "Found tabs (use spaces)"
-            exit 1
-          fi
+      - name: Run mallet linter
+        run: nix build .#checks.x86_64-linux.lint
