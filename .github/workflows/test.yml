@@ -49,8 +49,11 @@ jobs:
           export CL_SOURCE_REGISTRY="$PWD//"
 
           sbcl --non-interactive \
+               --eval '(format t "ASDF version: ~a~%" (asdf:asdf-version))' \
                --eval '(ql:quickload :rove)' \
                --eval '(ql:quickload (list :cffi :alexandria :trivial-garbage :babel))' \
+               --eval '(asdf:clear-source-registry)' \
+               --eval '(asdf:initialize-source-registry)' \
                --eval '(ql:quickload :tree-sitter-cl/tests)' \
                --eval '(let ((result (rove:run :tree-sitter-cl/tests))) (unless result (uiop:quit 1)))'
 
