@@ -1,0 +1,33 @@
+# FASL files
+*.fasl
+*.fas
+*.dx64fsl
+*.lx64fsl
+*.x86f
+*.abcl
+*.lib
+
+# Build artifacts
+*.o
+*.so
+*.dylib
+!c-wrapper/*.c
+
+# ASDF cache
+.cache/
+
+# Editor backups
+*~
+\#*\#
+.\#*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Quicklisp local
+quicklisp/
+
+# SLIME/Sly
+.swank-history
+.sly-mrepl-history

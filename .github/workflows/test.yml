@@ -1,0 +1,68 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libtree-sitter-dev
+
+      - name: Setup SBCL
+        uses: 40ants/setup-lisp@v4
+        with:
+          asdf-system: tree-sitter-cl
+
+      - name: Build C wrapper
+        run: |
+          cd c-wrapper
+          gcc -shared -fPIC -o libts-wrapper.so ts-wrapper.c \
+              -I/usr/include -L/usr/lib -ltree-sitter
+          sudo cp libts-wrapper.so /usr/local/lib/
+          sudo ldconfig
+
+      - name: Install JSON grammar
+        run: |
+          git clone --depth 1 https://github.com/tree-sitter/tree-sitter-json.git /tmp/ts-json
+          cd /tmp/ts-json/src
+          gcc -shared -fPIC -o libtree-sitter-json.so parser.c
+          sudo cp libtree-sitter-json.so /usr/local/lib/
+          sudo ldconfig
+
+      - name: Run tests
+        run: |
+          sbcl --non-interactive \
+               --eval '(ql:quickload :rove)' \
+               --eval '(push #P"./" asdf:*central-registry*)' \
+               --eval '(ql:quickload :tree-sitter-cl/tests)' \
+               --eval '(let ((result (rove:run :tree-sitter-cl/tests))) (unless result (uiop:quit 1)))'
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for trailing whitespace
+        run: |
+          if grep -rn '[[:blank:]]$' --include='*.lisp' --include='*.asd' .; then
+            echo "Found trailing whitespace"
+            exit 1
+          fi
+
+      - name: Check for tabs
+        run: |
+          if grep -rn $'\t' --include='*.lisp' --include='*.asd' .; then
+            echo "Found tabs (use spaces)"
+            exit 1
+          fi
