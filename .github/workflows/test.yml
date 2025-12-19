@@ -50,11 +50,8 @@ jobs:
 
           sbcl --non-interactive \
                --eval '(ql:quickload :rove)' \
-               --eval '(ql:quickload :cffi)' \
-               --eval '(ql:quickload :alexandria)' \
-               --eval '(ql:quickload :trivial-garbage)' \
-               --eval '(ql:quickload :babel)' \
-               --eval '(asdf:load-system :tree-sitter-cl/tests)' \
+               --eval '(ql:quickload (list :cffi :alexandria :trivial-garbage :babel))' \
+               --eval '(ql:quickload :tree-sitter-cl/tests)' \
                --eval '(let ((result (rove:run :tree-sitter-cl/tests))) (unless result (uiop:quit 1)))'
 
   lint:
