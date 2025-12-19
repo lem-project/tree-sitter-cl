@@ -16,12 +16,35 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@v30
         with:
-          nix_path: nixpkgs=channel:nixos-24.11
           extra_nix_config: |
             experimental-features = nix-command flakes
 
+      - name: Build C libraries
+        run: |
+          nix build .#ts-wrapper
+          nix build .#tree-sitter-json-grammar
+
+      - name: Setup SBCL and Quicklisp
+        run: |
+          nix profile install nixpkgs#sbcl
+          curl -sO https://beta.quicklisp.org/quicklisp.lisp
+          sbcl --non-interactive \
+               --load quicklisp.lisp \
+               --eval '(quicklisp-quickstart:install)' \
+               --eval '(ql:add-to-init-file)'
+
       - name: Run tests
-        run: nix build .#checks.x86_64-linux.test
+        run: |
+          TREE_SITTER_LIB=$(nix eval --raw nixpkgs#tree-sitter)/lib
+          TS_WRAPPER_LIB=$(nix build .#ts-wrapper --print-out-paths)/lib
+          JSON_GRAMMAR_LIB=$(nix build .#tree-sitter-json-grammar --print-out-paths)/lib
+          export LD_LIBRARY_PATH="$TREE_SITTER_LIB:$TS_WRAPPER_LIB:$JSON_GRAMMAR_LIB"
+          export CL_SOURCE_REGISTRY="$PWD//"
+
+          sbcl --non-interactive \
+               --eval '(ql:quickload :rove)' \
+               --eval '(asdf:load-system :tree-sitter-cl/tests)' \
+               --eval '(let ((result (rove:run :tree-sitter-cl/tests))) (unless result (uiop:quit 1)))'
 
   lint:
     runs-on: ubuntu-latest
@@ -32,9 +55,39 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@v30
         with:
-          nix_path: nixpkgs=channel:nixos-24.11
           extra_nix_config: |
             experimental-features = nix-command flakes
 
-      - name: Run mallet linter
-        run: nix build .#checks.x86_64-linux.lint
+      - name: Setup SBCL and Quicklisp
+        run: |
+          nix profile install nixpkgs#sbcl
+          curl -sO https://beta.quicklisp.org/quicklisp.lisp
+          sbcl --non-interactive \
+               --load quicklisp.lisp \
+               --eval '(quicklisp-quickstart:install)' \
+               --eval '(ql:add-to-init-file)'
+
+      - name: Build and run mallet
+        run: |
+          # Get mallet source and copy to writable directory
+          MALLET_SRC_NIX=$(nix build .#mallet-src --print-out-paths)
+          TRIVIAL_GLOB_SRC=$(nix build .#trivial-glob --print-out-paths)
+
+          MALLET_SRC="$HOME/mallet"
+          cp -r "$MALLET_SRC_NIX" "$MALLET_SRC"
+          chmod -R u+w "$MALLET_SRC"
+
+          export CL_SOURCE_REGISTRY="$TRIVIAL_GLOB_SRC//:$MALLET_SRC//"
+
+          # Build mallet
+          cd "$MALLET_SRC"
+          sbcl --noinform --non-interactive \
+               --eval '(ql:quickload :alexandria)' \
+               --eval '(ql:quickload :cl-ppcre)' \
+               --eval '(ql:quickload :eclector)' \
+               --eval '(asdf:load-system :mallet)' \
+               --eval '(asdf:make :mallet)'
+
+          # Run mallet on project
+          cd "$GITHUB_WORKSPACE"
+          "$MALLET_SRC/mallet" src/ *.asd

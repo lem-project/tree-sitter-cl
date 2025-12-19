@@ -31,3 +31,5 @@ quicklisp/
 # SLIME/Sly
 .swank-history
 .sly-mrepl-history
+result
+result-*

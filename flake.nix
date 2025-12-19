@@ -2,7 +2,7 @@
   description = "Common Lisp bindings for tree-sitter";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -11,16 +11,7 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
-        # Quicklisp dependencies
-        qlDeps = with pkgs.sbclPackages; [
-          cffi
-          alexandria
-          trivial-garbage
-          babel
-          rove
-        ];
-
-        # trivial-glob (not in nixpkgs)
+        # trivial-glob (not in Quicklisp)
         trivial-glob-src = pkgs.fetchFromGitHub {
           owner = "fukamachi";
           repo = "trivial-glob";
@@ -28,45 +19,12 @@
           sha256 = "sha256-XkeQXfKk7zcEuj4Q9eOve4d3hern0kyD2k3IamoZ6/w=";
         };
 
-        # mallet linter
+        # mallet linter source
         mallet-src = pkgs.fetchFromGitHub {
           owner = "fukamachi";
           repo = "mallet";
           rev = "de89ea2c319c703ed3fa8889de70e2abf85a7ce8";
           sha256 = "sha256-ujxSrepDVNq7RJxCfPQeF3owf5aXLEIkTzqIeIx+89o=";
-        };
-
-        mallet = pkgs.stdenv.mkDerivation {
-          pname = "mallet";
-          version = "0.1.1";
-          src = mallet-src;
-
-          nativeBuildInputs = [ pkgs.makeWrapper ];
-
-          buildInputs = [
-            pkgs.sbcl
-          ] ++ (with pkgs.sbclPackages; [
-            alexandria
-            cl-ppcre
-            eclector
-          ]);
-
-          buildPhase = ''
-            export HOME=$(mktemp -d)
-            export CL_SOURCE_REGISTRY="${trivial-glob-src}//:$PWD//"
-
-            sbcl --noinform --non-interactive \
-                 --eval '(require :asdf)' \
-                 --eval '(asdf:load-system :mallet)' \
-                 --eval '(asdf:make :mallet)'
-          '';
-
-          installPhase = ''
-            mkdir -p $out/bin
-            cp mallet $out/bin/mallet-unwrapped
-            makeWrapper $out/bin/mallet-unwrapped $out/bin/mallet \
-              --set SBCL_HOME "${pkgs.sbcl}/lib/sbcl"
-          '';
         };
 
         # Build the C wrapper library
@@ -96,17 +54,16 @@
             owner = "tree-sitter";
             repo = "tree-sitter-json";
             rev = "v0.24.8";
-            sha256 = "sha256-aKA5ZxdpuJaSpaBppkL3m0EzgDiT2NXCP3av7irNjvA=";
+            sha256 = "sha256-DNZC2cTy1C8OaMOpEHM6NoRtOIbLaBf0CLXXWCKODlw=";
           };
 
           buildPhase = ''
-            cd src
-            gcc -shared -fPIC -o libtree-sitter-json.so parser.c
+            gcc -shared -fPIC -o libtree-sitter-json.so src/parser.c
           '';
 
           installPhase = ''
             mkdir -p $out/lib
-            cp src/libtree-sitter-json.so $out/lib/
+            cp libtree-sitter-json.so $out/lib/
           '';
         };
 
@@ -123,65 +80,25 @@
             pkgs.sbcl
             pkgs.tree-sitter
             pkgs.gcc
-          ] ++ qlDeps;
+          ];
 
           LD_LIBRARY_PATH = libPath;
 
           shellHook = ''
-            export CL_SOURCE_REGISTRY="$PWD//:$CL_SOURCE_REGISTRY"
+            export CL_SOURCE_REGISTRY="$PWD//"
           '';
         };
 
-        checks = {
-          # Run tests
-          test = pkgs.stdenv.mkDerivation {
-            pname = "tree-sitter-cl-tests";
-            version = "0.1.0";
-            src = ./.;
-
-            buildInputs = [
-              pkgs.sbcl
-              pkgs.tree-sitter
-            ] ++ qlDeps;
-
-            buildPhase = ''
-              export HOME=$(mktemp -d)
-              export LD_LIBRARY_PATH="${libPath}"
-              export CL_SOURCE_REGISTRY="$PWD//"
-
-              sbcl --non-interactive \
-                   --eval '(require :asdf)' \
-                   --eval '(asdf:load-system :tree-sitter-cl/tests)' \
-                   --eval '(let ((result (rove:run :tree-sitter-cl/tests))) (unless result (uiop:quit 1)))'
-            '';
-
-            installPhase = ''
-              mkdir -p $out
-              echo "Tests passed" > $out/result.txt
-            '';
-          };
-
-          # Run mallet linter
-          lint = pkgs.stdenv.mkDerivation {
-            pname = "tree-sitter-cl-lint";
-            version = "0.1.0";
-            src = ./.;
-
-            buildInputs = [ mallet ];
-
-            buildPhase = ''
-              mallet src/ *.asd
-            '';
-
-            installPhase = ''
-              mkdir -p $out
-              echo "Lint passed" > $out/result.txt
-            '';
-          };
+        # For CI: provide library paths and sources
+        packages = {
+          inherit ts-wrapper tree-sitter-json-grammar;
+          trivial-glob = trivial-glob-src;
+          mallet-src = mallet-src;
         };
 
-        packages = {
-          inherit ts-wrapper tree-sitter-json-grammar mallet;
+        # Export library path for CI
+        lib = {
+          inherit libPath trivial-glob-src mallet-src;
         };
       });
 }
