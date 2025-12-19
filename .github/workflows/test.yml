@@ -13,39 +13,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libtree-sitter-dev
-
-      - name: Setup SBCL
-        uses: 40ants/setup-lisp@v4
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
         with:
-          asdf-system: tree-sitter-cl
-
-      - name: Build C wrapper
-        run: |
-          cd c-wrapper
-          gcc -shared -fPIC -o libts-wrapper.so ts-wrapper.c \
-              -I/usr/include -L/usr/lib -ltree-sitter
-          sudo cp libts-wrapper.so /usr/local/lib/
-          sudo ldconfig
-
-      - name: Install JSON grammar
-        run: |
-          git clone --depth 1 https://github.com/tree-sitter/tree-sitter-json.git /tmp/ts-json
-          cd /tmp/ts-json/src
-          gcc -shared -fPIC -o libtree-sitter-json.so parser.c
-          sudo cp libtree-sitter-json.so /usr/local/lib/
-          sudo ldconfig
+          nix_path: nixpkgs=channel:nixos-24.11
+          extra_nix_config: |
+            experimental-features = nix-command flakes
 
       - name: Run tests
-        run: |
-          sbcl --non-interactive \
-               --eval '(ql:quickload :rove)' \
-               --eval '(push #P"./" asdf:*central-registry*)' \
-               --eval '(ql:quickload :tree-sitter-cl/tests)' \
-               --eval '(let ((result (rove:run :tree-sitter-cl/tests))) (unless result (uiop:quit 1)))'
+        run: nix flake check
 
   lint:
     runs-on: ubuntu-latest
