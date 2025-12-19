@@ -30,8 +30,15 @@ jobs:
           curl -sO https://beta.quicklisp.org/quicklisp.lisp
           sbcl --non-interactive \
                --load quicklisp.lisp \
-               --eval '(quicklisp-quickstart:install)' \
-               --eval '(ql:add-to-init-file)'
+               --eval '(quicklisp-quickstart:install)'
+
+          # Add Quicklisp to init file manually (avoid interactive prompt)
+          cat >> ~/.sbclrc << 'INITEOF'
+          #-quicklisp
+          (let ((quicklisp-init (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname))))
+            (when (probe-file quicklisp-init)
+              (load quicklisp-init)))
+          INITEOF
 
       - name: Run tests
         run: |
@@ -64,8 +71,15 @@ jobs:
           curl -sO https://beta.quicklisp.org/quicklisp.lisp
           sbcl --non-interactive \
                --load quicklisp.lisp \
-               --eval '(quicklisp-quickstart:install)' \
-               --eval '(ql:add-to-init-file)'
+               --eval '(quicklisp-quickstart:install)'
+
+          # Add Quicklisp to init file manually (avoid interactive prompt)
+          cat >> ~/.sbclrc << 'INITEOF'
+          #-quicklisp
+          (let ((quicklisp-init (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname))))
+            (when (probe-file quicklisp-init)
+              (load quicklisp-init)))
+          INITEOF
 
       - name: Build and run mallet
         run: |
