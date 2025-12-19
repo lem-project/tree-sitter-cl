@@ -12,6 +12,9 @@
 *.so
 *.dylib
 !c-wrapper/*.c
+# Allow bundled libraries in static/
+!static/**/*.so
+!static/**/*.dylib
 
 # ASDF cache
 .cache/
