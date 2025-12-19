@@ -13,6 +13,24 @@
   (:darwin "libts-wrapper.dylib")
   (t (:default "ts-wrapper")))
 
+;; Add bundled library path to CFFI search path (platform-specific)
+;; Directory structure: static/<arch>/<os>/
+(pushnew (asdf:system-relative-pathname
+          :tree-sitter-cl
+          (format nil "static/~A/"
+                  (cond
+                    ;; macOS (Darwin)
+                    ((uiop:os-macosx-p)
+                     (format nil "~A/Darwin"
+                             (uiop:run-program '("uname" "-m") :output '(:string :stripped t))))
+                    ;; Linux / Generic Unix
+                    ((uiop:os-unix-p)
+                     (format nil "~A/Linux"
+                             (uiop:run-program '("uname" "-m") :output '(:string :stripped t))))
+                    (t "unknown"))))
+         cffi:*foreign-library-directories*
+         :test #'uiop:pathname-equal)
+
 (defvar *tree-sitter-loaded* nil)
 (defvar *ts-wrapper-loaded* nil)
 

@@ -93,11 +93,39 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: Update bundled libraries in static/
+        run: |
+          # Create platform-specific directories
+          mkdir -p static/x86_64/Linux
+          mkdir -p static/arm64/Darwin
+
+          # Extract and copy binaries
+          tar xzf artifacts/libts-wrapper-linux-x86_64/libts-wrapper-linux-x86_64.tar.gz -C static/x86_64/Linux/
+          tar xzf artifacts/libts-wrapper-macos-arm64/libts-wrapper-macos-arm64.tar.gz -C static/arm64/Darwin/
+
+          echo "Bundled libraries:"
+          find static -type f -name "*.so" -o -name "*.dylib" | xargs ls -la
+
+      - name: Commit bundled libraries
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add static/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update bundled libraries"
+            git push origin main
+          fi
 
       - name: Prepare release files
         run: |
@@ -120,16 +148,23 @@ jobs:
           tag_name: ${{ steps.version.outputs.version }}
           name: Release ${{ steps.version.outputs.version }}
           body: |
-            ## Binary Downloads
+            ## Installation
+
+            The library binaries are bundled in the `static/` directory.
+            Simply load the system with ASDF/Quicklisp:
+
+            ```lisp
+            (ql:quickload :tree-sitter-cl)
+            ```
+
+            ### Manual Installation (Alternative)
 
             | Platform | Architecture | Download |
             |----------|--------------|----------|
             | Linux | x86_64 | `libts-wrapper-linux-x86_64.tar.gz` |
             | macOS | arm64 (Apple Silicon) | `libts-wrapper-macos-arm64.tar.gz` |
 
-            ### Installation
-
-            1. Download the appropriate archive for your platform
+            1. Download the appropriate archive
             2. Extract: `tar xzf libts-wrapper-*.tar.gz`
             3. Copy to your library path (e.g., `/usr/local/lib`)
 
