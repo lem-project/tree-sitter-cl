@@ -150,13 +150,24 @@ Tree-sitter's C API returns `TSNode` structs by value (24 bytes), which CFFI can
 
 ### Building the wrapper
 
+**Using Make (recommended for development):**
+
 ```bash
-cd c-wrapper
-gcc -shared -fPIC -o libts-wrapper.so ts-wrapper.c \
-    -I/usr/include -L/usr/lib -ltree-sitter
+make           # Build the wrapper
+make test      # Build and run tests
+make clean     # Clean build artifacts
 ```
 
-Or with Nix:
+The built library (`libts-wrapper.so` or `libts-wrapper.dylib`) will be placed in `c-wrapper/`, which is automatically added to CFFI's search path.
+
+**Manual build:**
+
+```bash
+cd c-wrapper
+make
+```
+
+**With Nix:**
 
 ```bash
 nix build .#ts-wrapper

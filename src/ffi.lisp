@@ -13,6 +13,11 @@
   (:darwin "libts-wrapper.dylib")
   (t (:default "ts-wrapper")))
 
+;; Add c-wrapper directory to CFFI search path (for development builds)
+(pushnew (asdf:system-relative-pathname :tree-sitter-cl "c-wrapper/")
+         cffi:*foreign-library-directories*
+         :test #'uiop:pathname-equal)
+
 ;; Add bundled library path to CFFI search path (platform-specific)
 ;; Directory structure: static/<arch>/<os>/
 (pushnew (asdf:system-relative-pathname
