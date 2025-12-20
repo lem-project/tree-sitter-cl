@@ -13,38 +13,44 @@
   (:darwin "libts-wrapper.dylib")
   (t (:default "ts-wrapper")))
 
-;; Add c-wrapper directory to CFFI search path (for development builds)
-(pushnew (asdf:system-relative-pathname :tree-sitter-cl "c-wrapper/")
-         cffi:*foreign-library-directories*
-         :test #'uiop:pathname-equal)
-
-;; Add bundled library path to CFFI search path (platform-specific)
-;; Directory structure: static/<arch>/<os>/
-(pushnew (asdf:system-relative-pathname
-          :tree-sitter-cl
-          (format nil "static/~A/"
-                  (cond
-                    ;; macOS (Darwin)
-                    ((uiop:os-macosx-p)
-                     (format nil "~A/Darwin"
-                             (uiop:run-program '("uname" "-m") :output '(:string :stripped t))))
-                    ;; Linux / Generic Unix
-                    ((uiop:os-unix-p)
-                     (format nil "~A/Linux"
-                             (uiop:run-program '("uname" "-m") :output '(:string :stripped t))))
-                    (t "unknown"))))
-         cffi:*foreign-library-directories*
-         :test #'uiop:pathname-equal)
-
 (defvar *tree-sitter-loaded* nil)
 (defvar *ts-wrapper-loaded* nil)
+
+(defun setup-library-search-paths ()
+  "Setup CFFI library search paths for tree-sitter-cl.
+   Called at load time and image restoration."
+  ;; Add c-wrapper directory to CFFI search path (for development builds)
+  (alexandria:when-let ((system (asdf:find-system :tree-sitter-cl nil)))
+    (let ((c-wrapper-path (asdf:system-relative-pathname system "c-wrapper/"))
+          (static-path (asdf:system-relative-pathname
+                        system
+                        (format nil "static/~A/"
+                                (cond
+                                  ((uiop:os-macosx-p)
+                                   (format nil "~A/Darwin"
+                                           (uiop:run-program '("uname" "-m")
+                                                             :output '(:string :stripped t))))
+                                  ((uiop:os-unix-p)
+                                   (format nil "~A/Linux"
+                                           (uiop:run-program '("uname" "-m")
+                                                             :output '(:string :stripped t))))
+                                  (t "unknown"))))))
+      (pushnew c-wrapper-path cffi:*foreign-library-directories*
+               :test #'uiop:pathname-equal)
+      (pushnew static-path cffi:*foreign-library-directories*
+               :test #'uiop:pathname-equal))))
 
 (defun reset-library-state ()
   "Reset library loading state. Called at image startup."
   (setf *tree-sitter-loaded* nil
-        *ts-wrapper-loaded* nil))
+        *ts-wrapper-loaded* nil)
+  ;; Re-setup search paths in case the system is available at a different location
+  (setup-library-search-paths))
 
-;; Reset state when image is restored (for Nix builds)
+;; Setup paths at load time
+(setup-library-search-paths)
+
+;; Reset state when image is restored (for saved images / Nix builds)
 #+sbcl
 (pushnew 'reset-library-state sb-ext:*init-hooks*)
 
