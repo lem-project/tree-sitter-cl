@@ -76,12 +76,26 @@
 (defun ensure-ts-wrapper-loaded ()
   "Try to load the wrapper library for by-value struct handling."
   (unless *ts-wrapper-loaded*
+    ;; First try CFFI's normal search (includes *foreign-library-directories*)
     (handler-case
         (progn
           (cffi:load-foreign-library 'ts-wrapper)
-          (setf *ts-wrapper-loaded* t))
-      (error ()
-        nil))))
+          (setf *ts-wrapper-loaded* t)
+          (return-from ensure-ts-wrapper-loaded t))
+      (error ()))
+    ;; If that fails, try loading directly from LD_LIBRARY_PATH
+    (let ((ld-path (uiop:getenv "LD_LIBRARY_PATH")))
+      (when ld-path
+        (dolist (dir (uiop:split-string ld-path :separator ":"))
+          (let ((lib-path (merge-pathnames "libts-wrapper.so"
+                                           (uiop:ensure-directory-pathname dir))))
+            (when (probe-file lib-path)
+              (handler-case
+                  (progn
+                    (cffi:load-foreign-library lib-path)
+                    (setf *ts-wrapper-loaded* t)
+                    (return-from ensure-ts-wrapper-loaded t))
+                (error ())))))))))
 
 (defun tree-sitter-available-p ()
   "Check if tree-sitter library is available."
