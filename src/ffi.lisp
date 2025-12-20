@@ -19,6 +19,11 @@
 (defun setup-library-search-paths ()
   "Setup CFFI library search paths for tree-sitter-cl.
    Called at load time and image restoration."
+  ;; Remove stale paths that no longer exist
+  (setf cffi:*foreign-library-directories*
+        (remove-if-not (lambda (path)
+                         (ignore-errors (uiop:directory-exists-p path)))
+                       cffi:*foreign-library-directories*))
   ;; Add c-wrapper directory to CFFI search path (for development builds)
   (alexandria:when-let ((system (asdf:find-system :tree-sitter-cl nil)))
     (let ((c-wrapper-path (asdf:system-relative-pathname system "c-wrapper/"))
@@ -35,15 +40,20 @@
                                            (uiop:run-program '("uname" "-m")
                                                              :output '(:string :stripped t))))
                                   (t "unknown"))))))
-      (pushnew c-wrapper-path cffi:*foreign-library-directories*
-               :test #'uiop:pathname-equal)
-      (pushnew static-path cffi:*foreign-library-directories*
-               :test #'uiop:pathname-equal))))
+      (when (uiop:directory-exists-p c-wrapper-path)
+        (pushnew c-wrapper-path cffi:*foreign-library-directories*
+                 :test #'uiop:pathname-equal))
+      (when (uiop:directory-exists-p static-path)
+        (pushnew static-path cffi:*foreign-library-directories*
+                 :test #'uiop:pathname-equal)))))
 
 (defun reset-library-state ()
   "Reset library loading state. Called at image startup."
   (setf *tree-sitter-loaded* nil
         *ts-wrapper-loaded* nil)
+  ;; Close previously loaded libraries so they can be reloaded from new paths
+  (ignore-errors (cffi:close-foreign-library 'tree-sitter))
+  (ignore-errors (cffi:close-foreign-library 'ts-wrapper))
   ;; Re-setup search paths in case the system is available at a different location
   (setup-library-search-paths))
 
